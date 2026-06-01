@@ -3,7 +3,7 @@
  * Chuyển đổi giữa ReAct Agent (POST /agent) và LLM Direct (POST /llm)
  */
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'http://localhost:8000';
 
 // ========================================
 // DOM Elements
@@ -165,7 +165,7 @@ async function callAgentAPI(userInput) {
     const res = await fetch(`${API_BASE_URL}/agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userInput }),
+      body: JSON.stringify({ prompt: userInput }),
     });
 
     hideTyping();
@@ -205,7 +205,7 @@ async function callLLMAPI(userInput) {
     const res = await fetch(`${API_BASE_URL}/llm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userInput, history }),
+      body: JSON.stringify({ prompt: userInput }),
     });
 
     hideTyping();

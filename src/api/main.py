@@ -1,8 +1,12 @@
 import os
 from typing import Any, Dict, Optional
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+load_dotenv()
 
 from src.agent.agent import ReActAgent
 from src.core.llm_provider import LLMProvider
@@ -10,6 +14,14 @@ from src.tools import TOOLS
 
 
 app = FastAPI(title="LLM and Agent API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class PromptRequest(BaseModel):
