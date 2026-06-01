@@ -53,6 +53,9 @@ Critical rules:
 - Never write Observation yourself.
 - Never output more than one Action in a single response.
 - Never output Final Answer in the same response as Action.
+- If check_stock returns available=false, you MUST stop immediately.
+- Even if search_product result contains stock information, you must call check_stock before deciding availability.
+- For every final monetary total, always call calculator before Final Answer.
 - Only use tools listed above.
 - Do not invent product prices, stock, discounts, shipping fees, or calculation results.
 - If the user wants to buy a product, you must call check_stock before calculating final price.
