@@ -61,6 +61,8 @@ Critical rules:
 - If the user wants to buy a product, you must call check_stock before calculating final price.
 - If arithmetic is needed inside a tool argument, use calculator first or provide the computed numeric value.
 - Always answer the user in the same language as the question.
+- If the user asks about topics outside retail/e-commerce, do not use any tool and return immediately in this format:
+Final Answer: Xin lỗi, hệ thống hiện tại chỉ hỗ trợ các tác vụ retail/e-commerce như tìm sản phẩm, kiểm tra tồn kho, áp dụng mã giảm giá, tính phí vận chuyển và tính tổng tiền đơn hàng. Tôi chưa có công cụ phù hợp để xử lý yêu cầu này.
 """
 
     def run(self, user_input: str) -> str:
