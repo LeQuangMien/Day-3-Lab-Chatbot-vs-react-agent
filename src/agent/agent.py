@@ -27,41 +27,37 @@ class ReActAgent:
         2.  Format instructions: Thought, Action, Observation.
         """
         tool_descriptions = "\n".join([f"- {t['name']}: {t['description']}" for t in self.tools])
+
         return f"""
 You are an intelligent ReAct agent.
 
 You have access to the following tools:
 {tool_descriptions}
 
-You must solve the user's task by reasoning step-by-step and using tools when needed.
+Use this exact format.
 
-Use this exact format:
+If you need a tool, output exactly:
 
 Thought: explain what you need to do next.
 Action: tool_name(arg1=value1, arg2=value2)
 
-After you receive an Observation, continue:
+Then stop. Do not write Observation.
 
-Thought: explain the next step.
-Action: tool_name(arg1=value1, arg2=value2)
+The system will execute the tool and provide Observation.
 
-When you have enough information, stop using tools and answer with:
+When you have enough information and no more tool is needed, output exactly:
 
-Final Answer: your final answer to the user.
+Final Answer: your final answer.
 
-Important rules:
+Critical rules:
+- Never write Observation yourself.
+- Never output more than one Action in a single response.
+- Never output Final Answer in the same response as Action.
 - Only use tools listed above.
-- Do not invent product prices, stock, discounts, or shipping fees.
-- If a question requires product data, stock, discount, shipping, or calculation, use the tools.
-- Do not write Observation yourself. Observation will be provided by the system after a tool call.
-- Use valid Python-style arguments in Action.
-- Always answer in the same language as the user's question.
-- Example Action formats:
-  Action: search_product(query="laptop", max_price=20000000)
-  Action: check_stock(product_id="P001", quantity=2)
-  Action: apply_discount(price=31000000, coupon_code="SALE10")
-  Action: calculate_shipping(weight=3.4, destination="Hà Nội")
-  Action: calculator(expression="15500000 * 2 * 0.9 + 52200")
+- Do not invent product prices, stock, discounts, shipping fees, or calculation results.
+- If the user wants to buy a product, you must call check_stock before calculating final price.
+- If arithmetic is needed inside a tool argument, use calculator first or provide the computed numeric value.
+- Always answer the user in the same language as the question.
 """
 
     def run(self, user_input: str) -> str:
@@ -116,8 +112,39 @@ Important rules:
                     "latency_ms": result.get("latency_ms"),
                 },
             )
+            
+            # Parse Thought/Action from result
+            action = self._parse_action(llm_output)
 
+            # If Action found -> Call tool -> Append Observation
+            if action is not None:
+
+                tool_name, args = action
+
+                observation = self._execute_tool(tool_name, args)
+
+                logger.log_event(
+                    "TOOL_CALL",
+                    {
+                        "step": steps,
+                        "tool_name": tool_name,
+                        "args": args,
+                        "observation": observation,
+                    },
+                )
+
+                current_prompt += f"""
+
+Assistant output:
+{llm_output}
+
+Observation: {observation}
+"""
+                continue
+
+            # If Final Answer found -> Break loop
             final_answer = self._extract_final_answer(llm_output)
+
             if final_answer is not None:
                 logger.log_event(
                     "AGENT_END",
@@ -129,52 +156,31 @@ Important rules:
                 )
                 return final_answer
             
-            # Parse Thought/Action from result
-            action = self._parse_action(llm_output)
-
-            if action is None:
+            if final_answer is None and action is None:
                 logger.log_event(
                     "PARSER_ERROR",
                     {
                         "step": steps,
-                        "raw_output": llm_output,
-                    },
+                        "llm_output": llm_output,
+                    }
                 )
-
+                
                 current_prompt += f"""
 
 Assistant output:
 {llm_output}
 
-Observation: Could not parse a valid Action. Please follow the required format:
+Observation: Could not parse a valid Action or Final Answer. Please follow one of these formats:
+
 Thought: ...
 Action: tool_name(arg1=value1, arg2=value2)
+
+or
+
+Final Answer: ...
 """
-                continue
+    
 
-            # If Action found -> Call tool -> Append Observation
-
-            tool_name, args = action
-
-            observation = self._execute_tool(tool_name, args)
-
-            logger.log_event(
-                "TOOL_CALL",
-                {
-                    "step": steps,
-                    "tool_name": tool_name,
-                    "args": args,
-                    "observation": observation,
-                },
-            )
-
-            current_prompt += f"""
-
-Assistant output:
-{llm_output}
-
-Observation: {observation}
-"""
 
         logger.log_event(
             "AGENT_END",
@@ -190,11 +196,6 @@ Observation: {observation}
             "Here is the last model response:\n\n"
             f"{last_response}"
         )
-
-
-
-            
-            # TODO: If Final Answer found -> Break loop
                         
 
     def _execute_tool(self, tool_name: str, args: str) -> str:
@@ -366,15 +367,14 @@ Observation: {observation}
         args = []
 
         for arg in call_node.args:
-            args.append(ast.literal_eval(arg))
+            args.append(self._safe_literal_or_expr(arg))
 
         kwargs = {}
 
         for keyword in call_node.keywords:
             if keyword.arg is None:
                 raise ValueError("Keyword argument cannot be None.")
-            kwargs[keyword.arg] = ast.literal_eval(keyword.value)
-
+            kwargs[keyword.arg] = self._safe_literal_or_expr(keyword.value) 
         if args and kwargs:
             return {
                 "_args": args,
@@ -391,6 +391,49 @@ Observation: {observation}
             return args
 
         return {}
+    
+    def _safe_literal_or_expr(self, node: ast.AST) -> Any:
+        if isinstance(node, ast.Constant):
+            return node.value
+
+        if isinstance(node, ast.BinOp):
+            left = self._safe_literal_or_expr(node.left)
+            right = self._safe_literal_or_expr(node.right)
+
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+
+            raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+
+        if isinstance(node, ast.UnaryOp):
+            operand = self._safe_literal_or_expr(node.operand)
+
+            if isinstance(node.op, ast.USub):
+                return -operand
+            if isinstance(node.op, ast.UAdd):
+                return operand
+
+            raise ValueError(f"Unsupported unary operator: {type(node.op).__name__}")
+
+        if isinstance(node, ast.List):
+            return [self._safe_literal_or_expr(item) for item in node.elts]
+
+        if isinstance(node, ast.Tuple):
+            return tuple(self._safe_literal_or_expr(item) for item in node.elts)
+
+        if isinstance(node, ast.Dict):
+            return {
+                self._safe_literal_or_expr(k): self._safe_literal_or_expr(v)
+                for k, v in zip(node.keys, node.values)
+            }
+
+        raise ValueError(f"Unsupported argument expression: {type(node).__name__}")
     
     def _to_json_string(self, data: Any) -> str:
         """
