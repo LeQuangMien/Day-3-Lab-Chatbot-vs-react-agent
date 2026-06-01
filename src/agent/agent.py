@@ -90,7 +90,7 @@ Final Answer: Xin lỗi, hệ thống hiện tại chỉ hỗ trợ các tác v�
             except Exception as e:
                 logger.log_event("LLM ERROR", {"step": steps, "error": str(e)})
                 return f"Error during LLM generation: {e}"
-            
+
             llm_output = result.get("content", "").strip()
             last_response = llm_output
 
@@ -117,7 +117,7 @@ Final Answer: Xin lỗi, hệ thống hiện tại chỉ hỗ trợ các tác v�
                     "latency_ms": result.get("latency_ms"),
                 },
             )
-            
+
             # Parse Thought/Action from result
             action = self._parse_action(llm_output)
 
@@ -160,7 +160,7 @@ Observation: {observation}
                     },
                 )
                 return final_answer
-            
+
             if final_answer is None and action is None:
                 logger.log_event(
                     "PARSER_ERROR",
@@ -169,7 +169,7 @@ Observation: {observation}
                         "llm_output": llm_output,
                     }
                 )
-                
+
                 current_prompt += f"""
 
 Assistant output:
@@ -184,7 +184,7 @@ or
 
 Final Answer: ...
 """
-    
+
 
 
         logger.log_event(
@@ -201,12 +201,12 @@ Final Answer: ...
             "Here is the last model response:\n\n"
             f"{last_response}"
         )
-                        
+
 
     def _execute_tool(self, tool_name: str, args: str) -> str:
         """
         Execute a tool by name with given arguments.
-        
+
         Returns:
             JSON string containing the tool result or error
         """
@@ -216,7 +216,7 @@ Final Answer: ...
             if tool['name'] == tool_name:
                 tool_func = tool['func']
                 break
-        
+
         if tool_func is None:
             return self._to_json_string(
                 {
@@ -256,7 +256,7 @@ Final Answer: ...
                     "received_args": args,
                 }
             )
-        
+
         except Exception as e:
             logger.log_event(
                 "TOOL_ERROR",
@@ -273,8 +273,8 @@ Final Answer: ...
                     "message": f"Tool execution error for '{tool_name}': {str(e)}",
                     "received_args": args,
                 }
-            )            
-    
+            )
+
 
     def _extract_final_answer(self, text: str) -> Optional[str]:
         """
@@ -290,7 +290,7 @@ Final Answer: ...
             return match.group(1).strip()
 
         return None
-    
+
     def _parse_action(self, text: str) -> Optional[Tuple[str, Any]]:
         """
         Parse Action from LLM output.
@@ -327,7 +327,7 @@ Final Answer: ...
             )
 
             return tool_name, raw_args
-        
+
     def _parse_tool_args(self, raw_args: str) -> Any:
         """
         Parse the argument string inside tool_name(...).
@@ -379,7 +379,7 @@ Final Answer: ...
         for keyword in call_node.keywords:
             if keyword.arg is None:
                 raise ValueError("Keyword argument cannot be None.")
-            kwargs[keyword.arg] = self._safe_literal_or_expr(keyword.value) 
+            kwargs[keyword.arg] = self._safe_literal_or_expr(keyword.value)
         if args and kwargs:
             return {
                 "_args": args,
@@ -396,7 +396,7 @@ Final Answer: ...
             return args
 
         return {}
-    
+
     def _safe_literal_or_expr(self, node: ast.AST) -> Any:
         if isinstance(node, ast.Constant):
             return node.value
@@ -439,7 +439,7 @@ Final Answer: ...
             }
 
         raise ValueError(f"Unsupported argument expression: {type(node).__name__}")
-    
+
     def _to_json_string(self, data: Any) -> str:
         """
         Convert tool result to JSON string for Observation.
