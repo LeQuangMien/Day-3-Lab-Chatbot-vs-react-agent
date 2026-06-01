@@ -30,7 +30,7 @@ class PromptRequest(BaseModel):
 
 
 class AgentRequest(PromptRequest):
-    max_steps: int = Field(default=5, ge=1, le=20)
+    max_steps: int = Field(default=10, ge=1, le=20)
 
 
 def get_llm_provider() -> LLMProvider:
