@@ -23,99 +23,27 @@ User Question
 → Final Answer
 ```
 
-The final evaluation showed that the baseline chatbot passed **0/13** test cases, while the ReAct agent passed **7/13** test cases. The agent passed all normal successful purchase workflows, but still struggled with several edge cases, especially out-of-stock handling and strict evaluator requirements.
-
 ### 2. Modules Implemented
 
 The implementation focused on the following components:
 
 - **ReAct Agent Core**: `src/agent/agent.py`
   - Implemented the multi-step ReAct reasoning loop.
-  - Added parsing for tool actions such as `search_product(query="...")`.
+  - Added parsing for tool actions.
   - Added execution flow for tool calls and observations.
   - Added max-step protection to avoid infinite loops.
 
-- **Retail Tools**: `src/tools/retail_tools.py` or equivalent tool module
+- **Retail Tools**: `src/tools`
   - `search_product(query)`: searches a small product database.
   - `check_stock(product_id, quantity)`: checks whether the requested quantity is available.
   - `apply_discount(price, coupon_code)`: applies supported coupons such as `SALE10` and `STUDENT5`.
   - `calculate_shipping(weight, destination, coupon_code=None)`: computes shipping fee by destination and weight.
   - `calculator(expression)`: performs final arithmetic calculation.
 
-- **Baseline Chatbot**: baseline evaluation path
-  - Used the same LLM provider but without tools.
-  - Served as a comparison point to show the limitation of direct LLM answering.
-
-- **Evaluation Script**: retail evaluation runner
+- **Evaluation Script**: `evaluation`
   - Created 13 test cases across three categories: `success`, `edge`, and `failure_stress`.
   - Compared baseline and agent answers using expected totals, expected keywords, forbidden keywords, and expected tool calls.
   - Saved evaluation results to `retail_eval_20260601_151158.json`.
-
-### 3. Code Highlights
-
-#### ReAct loop concept
-
-```python
-for step in range(self.max_steps):
-    response = self.llm.generate(prompt, system_prompt=self.get_system_prompt())
-    content = response["content"]
-
-    if "Final Answer:" in content:
-        return content.split("Final Answer:", 1)[1].strip()
-
-    action = parse_action(content)
-    observation = self._execute_tool(action.tool_name, action.args)
-
-    prompt += f"\n\nAssistant output:\n{content}\n\nObservation: {observation}\n"
-
-return fallback_answer
-```
-
-This design makes the agent different from a normal chatbot. Instead of answering immediately, the agent can interact with external tools and update its reasoning based on the returned observations.
-
-#### Tool execution concept
-
-```python
-def _execute_tool(self, tool_name, args):
-    if tool_name not in self.tools:
-        return {"success": False, "message": f"Unknown tool: {tool_name}"}
-
-    try:
-        return self.tools[tool_name](**args)
-    except Exception as e:
-        return {"success": False, "message": str(e)}
-```
-
-This provides a unified interface for calling different tools and returning structured observations to the agent.
-
-#### Example successful trace
-
-For the case "Buy 2 iPhone 15 with SALE10 shipping to Ho Chi Minh", the agent used the following tool sequence:
-
-```text
-search_product
-→ check_stock
-→ apply_discount
-→ calculate_shipping
-→ calculator
-→ Final Answer
-```
-
-The agent correctly calculated:
-
-```text
-2 × 18,990,000 = 37,980,000
-SALE10 discount = 3,798,000
-Price after discount = 34,182,000
-Shipping fee = 34,000
-Final total = 34,216,000 VND
-```
-
-### 4. Documentation of Interaction with ReAct Loop
-
-The tools are not called directly by the user. Instead, the LLM decides which tool should be used at each step. The ReAct loop then parses the model output, executes the chosen tool, and appends the tool result as an `Observation`.
-
-This observation becomes part of the next prompt, allowing the model to continue reasoning with grounded information. For example, after `search_product` returns product price, stock, and weight, the model can decide to call `check_stock`, then `apply_discount`, then `calculate_shipping`, and finally `calculator`.
 
 ---
 
@@ -179,9 +107,7 @@ There were three related issues:
 
 ### 4. Solution
 
-The recommended fix is to add both a **prompt-level rule** and a **code-level guardrail**.
-
-#### Prompt-level rule
+The solution is to add a **prompt-level rule**:
 
 ```text
 If check_stock returns available=false, you MUST stop immediately.
@@ -274,19 +200,7 @@ Possible improvements:
 - Use smaller or cheaper models for simple tool-routing decisions.
 - Track token usage, latency, number of steps, and failed parse rate in a dashboard.
 
-### 4. Evaluation Improvements
-
-The current evaluation is useful but can be improved. Some failures were due to strict keyword matching rather than truly wrong answers. I would improve the evaluator by separating:
-
-```python
-required_keywords = ["Cần Thơ"]
-any_of_keywords = ["không hỗ trợ", "unsupported"]
-forbidden_keywords = ["tổng tiền cuối cùng là"]
-```
-
-I would also treat `expected_total = None` as a special case, because edge cases should not require a final total.
-
-### 5. Next Version Plan
+### 4. Next Version Plan
 
 For the next version of the agent, I would prioritize:
 
