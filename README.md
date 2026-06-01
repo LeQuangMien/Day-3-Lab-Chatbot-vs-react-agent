@@ -2,6 +2,52 @@
 
 Welcome to Phase 3 of the Agentic AI course! This lab focuses on moving from a simple LLM Chatbot to a sophisticated **ReAct Agent** with industry-standard monitoring.
 
+---
+
+## ▶️ Cách chạy project
+
+### 1. Cài đặt dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Cấu hình API key
+
+```bash
+cp .env.example .env
+```
+
+> Nếu dùng **Local**, tải model từ [Hugging Face](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf) và bỏ vào thư mục `models/`.
+
+### 3. Chạy Backend API
+
+```bash
+uvicorn src.api.main:app --reload --port 8000
+```
+
+API sẽ chạy tại `http://localhost:8000`. Xem Swagger UI tại `http://localhost:8000/docs`.
+
+### 4. Mở giao diện Chatbot
+
+Mở trực tiếp file `index.html` trong trình duyệt (hoặc dùng Live Server trong VS Code):
+
+```
+index.html
+```
+
+Giao diện hỗ trợ 2 chế độ:
+- **🤖 Agent** — Gọi `POST /agent`, sử dụng ReAct loop với tools (tìm sản phẩm, kiểm tra kho, tính tiền...)
+- **⚡ LLM** — Gọi `POST /llm`, gọi thẳng đến LLM không qua Agent
+
+### 5. Chạy tests
+
+```bash
+pytest tests/ -v
+```
+
+---
+
 ## 🚀 Getting Started
 
 ### 1. Setup Environment
